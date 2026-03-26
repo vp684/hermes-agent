@@ -583,6 +583,15 @@ OPTIONAL_ENV_VARS = {
         "category": "tool",
         "advanced": True,
     },
+    "SEARXNG_URL": {
+        "description": "SearXNG instance URL for web search (self-hosted meta-search engine)",
+        "prompt": "SearXNG URL (e.g., http://localhost:8888)",
+        "url": "http://localhost:8888",
+        "password": False,
+        "tools": ["web_search"],
+        "category": "tool",
+        "advanced": True,
+    },
     "TAVILY_API_KEY": {
         "description": "Tavily API key for AI-native web search, extract, and crawl",
         "prompt": "Tavily API key",

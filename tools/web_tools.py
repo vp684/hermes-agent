@@ -74,14 +74,18 @@ def _get_backend() -> str:
     keys manually without running setup.
     """
     configured = _load_web_config().get("backend", "").lower().strip()
-    if configured in ("parallel", "firecrawl", "tavily"):
+    if configured in ("parallel", "firecrawl", "tavily", "searxng"):
         return configured
 
     # Fallback for manual / legacy config — use whichever key is present.
+    has_searxng = _has_env("SEARXNG_URL")
     has_firecrawl = _has_env("FIRECRAWL_API_KEY") or _has_env("FIRECRAWL_API_URL")
     has_parallel = _has_env("PARALLEL_API_KEY")
     has_tavily = _has_env("TAVILY_API_KEY")
 
+    # SearXNG has priority if configured (self-hosted meta-search)
+    if has_searxng:
+        return "searxng"
     if has_tavily and not has_firecrawl and not has_parallel:
         return "tavily"
     if has_parallel and not has_firecrawl:
@@ -200,6 +204,70 @@ def _normalize_tavily_search_results(response: dict) -> dict:
             "description": result.get("content", ""),
             "position": i + 1,
         })
+    return {"success": True, "data": {"web": web_results}}
+
+
+# ─── SearXNG Client ────────────────────────────────────────────────────────────
+
+_SEARXNG_BASE_URL = os.getenv("SEARXNG_URL", "").rstrip("/")
+
+
+def _searxng_search(query: str, limit: int = 5, time_range: str = None, language: str = "auto") -> dict:
+    """Search using SearXNG instance.
+
+    Args:
+        query: The search query
+        limit: Maximum results to return
+        time_range: Optional time range (day, week, month, year)
+        language: Language code (auto, en, etc.)
+
+    Returns:
+        dict with standard web search format
+    """
+    if not _SEARXNG_BASE_URL:
+        raise ValueError("SEARXNG_URL environment variable not set")
+
+    params = {
+        "q": query,
+        "format": "json",
+        "language": language,
+        "safesearch": "0",
+        "categories": "general",
+    }
+
+    if time_range and time_range not in ("", "anytime"):
+        params["time_range"] = time_range
+
+    url = f"{_SEARXNG_BASE_URL}/search"
+    logger.info("SearXNG search: %s", url)
+
+    response = httpx.get(url, params=params, timeout=30)
+    response.raise_for_status()
+
+    raw = response.json()
+    return _normalize_searxng_results(raw, limit)
+
+
+def _normalize_searxng_results(response: dict, limit: int = 10) -> dict:
+    """Normalize SearXNG /search response to standard web search format.
+
+    SearXNG returns:
+        {results: [{title, url, content, engine, parsed_url, ...}]}
+    """
+    web_results = []
+    for i, result in enumerate(response.get("results", [])):
+        if i >= limit:
+            break
+        web_results.append({
+            "title": result.get("title", ""),
+            "url": result.get("url", ""),
+            "description": result.get("content", ""),
+            "position": i + 1,
+        })
+
+    if not web_results:
+        return {"success": False, "error": "No results found", "data": {"web": []}}
+
     return {"success": True, "data": {"web": web_results}}
 
 
@@ -718,6 +786,20 @@ def web_search_tool(query: str, limit: int = 5) -> str:
 
         # Dispatch to the configured backend
         backend = _get_backend()
+        if backend == "searxng":
+            logger.info("SearXNG search: '%s' (limit: %d)", query, limit)
+            try:
+                response_data = _searxng_search(query, limit)
+                debug_call_data["results_count"] = len(response_data.get("data", {}).get("web", []))
+                result_json = json.dumps(response_data, indent=2, ensure_ascii=False)
+                debug_call_data["final_response_size"] = len(result_json)
+                _debug.log_call("web_search_tool", debug_call_data)
+                _debug.save()
+                return result_json
+            except Exception as searxng_error:
+                logger.warning("SearXNG failed: %s, falling back to firecrawl", searxng_error)
+                # Fall through to firecrawl
+
         if backend == "parallel":
             response_data = _parallel_search(query, limit)
             debug_call_data["results_count"] = len(response_data.get("data", {}).get("web", []))
