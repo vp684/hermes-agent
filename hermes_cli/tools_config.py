@@ -13,11 +13,9 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
-import os
 
 from hermes_cli.config import (
     load_config, save_config, get_env_value, save_env_value,
-    get_hermes_home,
 )
 from hermes_cli.colors import Colors, color
 
@@ -382,7 +380,7 @@ def _platform_toolset_summary(config: dict, platforms: Optional[List[str]] = Non
 
 def _get_platform_tools(config: dict, platform: str) -> Set[str]:
     """Resolve which individual toolset names are enabled for a platform."""
-    from toolsets import resolve_toolset, TOOLSETS
+    from toolsets import resolve_toolset
 
     platform_toolsets = config.get("platform_toolsets", {})
     toolset_names = platform_toolsets.get(platform)
@@ -661,7 +659,7 @@ def _configure_tool_category(ts_key: str, cat: dict, config: dict):
         # Multiple providers - let user choose
         print()
         # Use custom title if provided (e.g. "Select Search Provider")
-        title = cat.get("setup_title", f"Choose a provider")
+        title = cat.get("setup_title", "Choose a provider")
         print(color(f"  --- {icon} {name} - {title} ---", Colors.CYAN))
         if cat.get("setup_note"):
             _print_info(f"  {cat['setup_note']}")
@@ -770,9 +768,9 @@ def _configure_provider(provider: dict, config: dict):
 
             if value:
                 save_env_value(var["key"], value)
-                _print_success(f"    Saved")
+                _print_success("    Saved")
             else:
-                _print_warning(f"    Skipped")
+                _print_warning("    Skipped")
                 all_configured = False
 
     # Run post-setup hooks if needed
@@ -836,9 +834,9 @@ def _configure_simple_requirements(ts_key: str):
         value = _prompt(f"    {var}", password=True)
         if value and value.strip():
             save_env_value(var, value.strip())
-            _print_success(f"    Saved")
+            _print_success("    Saved")
         else:
-            _print_warning(f"    Skipped")
+            _print_warning("    Skipped")
 
 
 def _reconfigure_tool(config: dict):
@@ -926,7 +924,7 @@ def _reconfigure_provider(provider: dict, config: dict):
             _print_success(f"  Browser cloud provider set to: {bp}")
         else:
             config.get("browser", {}).pop("cloud_provider", None)
-            _print_success(f"  Browser set to local mode")
+            _print_success("  Browser set to local mode")
 
     # Set web search backend in config if applicable
     if provider.get("web_backend"):
@@ -948,9 +946,9 @@ def _reconfigure_provider(provider: dict, config: dict):
         value = _prompt(f"    {var.get('prompt', var['key'])} (Enter to keep current)", password=not default_val)
         if value and value.strip():
             save_env_value(var["key"], value.strip())
-            _print_success(f"    Updated")
+            _print_success("    Updated")
         else:
-            _print_info(f"    Kept current")
+            _print_info("    Kept current")
 
 
 def _reconfigure_simple_requirements(ts_key: str):
@@ -972,9 +970,9 @@ def _reconfigure_simple_requirements(ts_key: str):
         value = _prompt(f"    {var} (Enter to keep current)", password=True)
         if value and value.strip():
             save_env_value(var, value.strip())
-            _print_success(f"    Updated")
+            _print_success("    Updated")
         else:
-            _print_info(f"    Kept current")
+            _print_info("    Kept current")
 
 
 # ─── Main Entry Point ─────────────────────────────────────────────────────────
